@@ -14,7 +14,6 @@ const app = Fastify({ logger: { level: process.env.LOG_LEVEL || 'info' }, trustP
 await app.register(formbody);
 await app.register(fastifyStatic, { root: join(process.cwd(), 'public'), prefix: '/static/' });
 
-app.get('/', async (_req, reply) => reply.type('text/html').send('<h3>HH → Битрикс24 коннектор работает</h3>'));
 app.get('/health', async () => {
   await pool.query('SELECT 1');
   return { ok: true };

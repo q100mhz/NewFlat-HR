@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { config } from '../config.js';
 import { randomId, sign, verify } from '../crypto.js';
 import { query } from '../db.js';
@@ -10,7 +10,7 @@ import { messagePage } from '../views.js';
 import type { Session } from './b24.js';
 import { tick } from '../sync/worker.js';
 
-const redirectUri = () => `${config.publicUrl}/hh/callback`;
+const redirectUri = () => config.hh.redirectUri;
 
 export async function hhRoutes(app: FastifyInstance) {
   // Начало подключения аккаунта hh.ru (открывается во всплывающем окне)
@@ -29,9 +29,17 @@ export async function hhRoutes(app: FastifyInstance) {
     return reply.redirect(url.toString());
   });
 
-  // Возврат с hh.ru после авторизации
-  app.get('/hh/callback', async (req, reply) => {
-    const q = req.query as Record<string, string>;
+  // Возврат с hh.ru после авторизации. Обрабатываем и /hh/callback, и корень домена
+  // (если на dev.hh.ru redirect URI указан просто как https://домен).
+  app.get('/', async (req, reply) => {
+    const q = (req.query ?? {}) as Record<string, string>;
+    if (q.state || q.code || q.error) return callback(req, reply);
+    return reply.type('text/html').send('<h3>HH → Битрикс24 коннектор работает</h3>');
+  });
+  app.get('/hh/callback', (req, reply) => callback(req, reply));
+
+  async function callback(req: FastifyRequest, reply: FastifyReply) {
+    const q = (req.query ?? {}) as Record<string, string>;
     const st = verify<{ pid: number }>(q.state);
     const page = (title: string, text: string, ok = true) =>
       reply.type('text/html').send(
@@ -75,7 +83,7 @@ export async function hhRoutes(app: FastifyInstance) {
     } catch (e) {
       return page('Ошибка подключения', errText(e), false);
     }
-  });
+  }
 
   // Вебхук hh.ru: просто ускоряем опрос соответствующего аккаунта
   app.post('/hh/webhook', async (req, reply) => {

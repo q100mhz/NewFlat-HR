@@ -34,6 +34,8 @@ export const config = {
     apiUrl: optional('HH_API_URL', 'https://api.hh.ru'),
     oauthUrl: optional('HH_OAUTH_URL', 'https://hh.ru/oauth/authorize'),
     tokenUrl: optional('HH_TOKEN_URL', 'https://api.hh.ru/token'),
+    /** Redirect URI — ДОЛЖЕН совпадать с указанным в настройках приложения на dev.hh.ru */
+    redirectUri: optional('HH_REDIRECT_URI', publicUrl + '/hh/callback'),
     /** Тип события вебхука hh.ru о новом отклике. Пусто — вебхуки не используются, только опрос. */
     webhookEvent: optional('HH_WEBHOOK_EVENT', 'NEW_NEGOTIATION_VACANCY'),
   },

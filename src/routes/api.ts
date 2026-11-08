@@ -81,7 +81,7 @@ export async function apiRoutes(app: FastifyInstance) {
         ownClientId: p.hhClientId,
         serverCredentials: Boolean(config.hh.clientId && config.hh.clientSecret),
         available: Boolean(hhCredentials(p)),
-        redirectUri: `${config.publicUrl}/hh/callback`,
+        redirectUri: config.hh.redirectUri,
       },
       dictionaries: { hhFields: HH_FIELDS, hhActions: HH_ACTIONS },
       publicUrl: config.publicUrl,
