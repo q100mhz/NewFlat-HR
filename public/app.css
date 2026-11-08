@@ -11,7 +11,12 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 -app
 code { background: #f0f3f5; padding: 1px 5px; border-radius: 4px; font-size: 12px; word-break: break-all; }
 
 .top { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; background: var(--card); border-bottom: 1px solid var(--line); }
-.brand { font-size: 18px; font-weight: 600; }
+.brand-wrap { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.logo { display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text); padding-right: 16px; border-right: 1px solid var(--line); flex: none; }
+.logo-mark { width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, #2fc6f6, #0b6fd1); color: #fff; font-weight: 800; font-size: 14px; display: flex; align-items: center; justify-content: center; letter-spacing: .5px; }
+.logo-text { font-weight: 800; font-size: 15px; letter-spacing: .6px; }
+.product { min-width: 0; }
+.brand { font-size: 16px; font-weight: 600; }
 .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; background: #eef1f3; }
 .badge.on { background: var(--ok-bg); color: var(--ok); }
 .badge.off { background: var(--warn-bg); color: var(--warn); }
@@ -36,8 +41,8 @@ input:focus, select:focus { outline: 2px solid rgba(47,198,246,.35); border-colo
 .switch input:checked + span { background: var(--ok); }
 .switch input:checked + span::after { left: 18px; }
 
-.btn { background: var(--accent); color: #fff; border: 0; padding: 8px 16px; border-radius: 6px; font: inherit; font-weight: 600; cursor: pointer; }
-.btn:hover { background: var(--accent-dark); }
+.btn { background: var(--accent-dark); color: #fff; border: 0; padding: 8px 16px; border-radius: 6px; font: inherit; font-weight: 600; cursor: pointer; }
+.btn:hover { background: #0a86b0; }
 .btn.secondary { background: #eef1f3; color: var(--text); }
 .btn.ghost { background: none; color: var(--accent-dark); }
 .btn:disabled { opacity: .5; cursor: default; }
@@ -48,6 +53,14 @@ input:focus, select:focus { outline: 2px solid rgba(47,198,246,.35); border-colo
 .note { padding: 10px 14px; border-radius: 8px; margin: 8px 0; }
 .note.ok { background: var(--ok-bg); color: #1d6b31; }
 .note.warn { background: var(--warn-bg); color: var(--warn); margin: 12px 24px 0; }
+.note.err { background: var(--err-bg); color: var(--err); margin: 12px 24px 0; }
+label.inline { flex-direction: row; align-items: center; gap: 8px; font-size: 14px; color: var(--text); }
+.tag { font-size: 11px; padding: 1px 6px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); margin-left: 4px; white-space: nowrap; }
+.site-footer { max-width: 1100px; margin: 8px 24px 24px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; color: var(--muted); font-size: 13px; }
+.site-footer b { color: var(--text); }
+.site-footer .contacts { display: flex; gap: 18px; flex-wrap: wrap; }
+.site-footer a { color: var(--accent-dark); text-decoration: none; }
+.site-footer a:hover { text-decoration: underline; }
 .card .note.warn { margin: 8px 0; }
 
 .tbl { width: 100%; border-collapse: collapse; margin: 6px 0 12px; }
@@ -78,5 +91,7 @@ input:focus, select:focus { outline: 2px solid rgba(47,198,246,.35); border-colo
 
 @media (max-width: 600px) {
   .top, main, .tabs, .savebar { padding-left: 12px; padding-right: 12px; }
+  .site-footer { margin-left: 12px; margin-right: 12px; }
+  .logo-text { display: none; }
   .tbl { display: block; overflow-x: auto; }
 }

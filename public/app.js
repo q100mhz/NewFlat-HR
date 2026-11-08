@@ -72,6 +72,7 @@
       renderConnect();
       renderPipelineStatic();
       renderBadge();
+      renderOutage();
       return loadMeta(S.entityTypeId);
     });
   }
@@ -103,10 +104,26 @@
           '<td>' + esc(a.managerName) + (a.lastError ? '<div class="err-text">' + esc(a.lastError) + '</div>' : '') + '</td>' +
           '<td>' + esc(a.employerName) + '</td>' +
           '<td><input type="date" data-since="' + a.id + '" value="' + since + '"></td>' +
-          '<td>' + fmtDate(a.lastPollAt) + '</td>' +
+          '<td>' + fmtDate(a.lastSuccessAt) + (a.catchupFrom ? '<div class="muted">идёт догрузка…</div>' : '') + '</td>' +
           '<td><button class="btn danger" data-disconnect="' + a.id + '">Отключить</button></td></tr>';
       }).join('');
     }
+  }
+
+  /** Предупреждение, если синхронизация с hh.ru давно не проходила */
+  function renderOutage() {
+    var interval = (state.settings.pollIntervalMinutes || 3) * 60000;
+    var bad = state.accounts.filter(function (a) {
+      if (!a.active) return false;
+      if (a.lastError) return true;
+      return a.lastSuccessAt && Date.now() - new Date(a.lastSuccessAt).getTime() > interval * 2 + 5 * 60000 && state.settings.enabled;
+    });
+    var el = $('outage-note');
+    if (!bad.length) { el.classList.add('hidden'); return; }
+    el.innerHTML = '⚠️ Связь с hh.ru нарушена: ' + bad.map(function (a) {
+      return esc(a.managerName) + ' — последняя успешная синхронизация ' + fmtDate(a.lastSuccessAt) + (a.lastError ? ' (' + esc(a.lastError) + ')' : '');
+    }).join('; ') + '. Отклики не потеряются: после восстановления связи они будут догружены автоматически.';
+    el.classList.remove('hidden');
   }
 
   function renderPipelineStatic() {
@@ -226,7 +243,7 @@
       var tbody = document.querySelector('#resp-table tbody');
       tbody.innerHTML = rows.length ? rows.map(function (r) {
         var link = itemLink(r);
-        var name = esc(r.candidate_name || '—') + (r.is_repeat ? ' <span class="muted">(повторный)</span>' : '');
+        var name = esc(r.candidate_name || '—') + (r.is_repeat ? ' <span class="muted">(повторный)</span>' : '') + (r.via_catchup ? '<span class="tag" title="Отклик пришёл во время сбоя и был догружен">догружен</span>' : '');
         var hh = r.hh_action ? 'ожидает: ' + esc(state.dictionaries.hhActions[r.hh_action] || r.hh_action) : (r.hh_last_action ? esc(state.dictionaries.hhActions[r.hh_last_action] || r.hh_last_action) : '');
         if (r.hh_action_error) hh += '<div class="err-text">' + esc(r.hh_action_error) + '</div>';
         return '<tr><td>' + fmtDate(r.hh_created_at) + '</td>' +
@@ -341,6 +358,18 @@
       .catch(function (e) { toast(e.message, true); });
   });
 
+  (function () {
+    var d = new Date(Date.now() - 7 * 86400000);
+    $('catchup-from').value = d.toISOString().slice(0, 10);
+  })();
+  $('catchup').addEventListener('click', function () {
+    var from = $('catchup-from').value;
+    if (!from) return toast('Укажите дату', true);
+    api('POST', '/api/catchup', { from: from + 'T00:00:00+03:00' }).then(function () {
+      toast('Догрузка запущена. Результат появится в журнале через 1–3 минуты');
+      setTimeout(loadJournal, 20000);
+    }).catch(function (e) { toast(e.message, true); });
+  });
   $('vac-reload').addEventListener('click', function () { loadVacancies(true); });
   $('journal-reload').addEventListener('click', loadJournal);
   $('sync-now').addEventListener('click', function () {

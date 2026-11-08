@@ -10,15 +10,21 @@
 </head>
 <body>
   <header class="top">
-    <div>
-      <div class="brand">HH.ru → Битрикс24</div>
-      <div class="muted" id="portal-line"></div>
+    <div class="brand-wrap">
+      <a class="logo" href="https://itb2b.ru" target="_blank" rel="noopener" title="ИТ ИНТЕГРАЦИЯ">
+        <span class="logo-mark">ИТ</span><span class="logo-text">ИТ ИНТЕГРАЦИЯ</span>
+      </a>
+      <div class="product">
+        <div class="brand">HH.ru → Битрикс24</div>
+        <div class="muted" id="portal-line"></div>
+      </div>
     </div>
     <div class="top-actions">
       <span id="status-badge" class="badge">…</span>
     </div>
   </header>
 
+  <div id="outage-note" class="note err hidden"></div>
   <div id="readonly-note" class="note warn hidden">Вы не администратор портала — настройки доступны только для просмотра.</div>
 
   <nav class="tabs" id="tabs">
@@ -50,7 +56,7 @@
         <h2>2. Аккаунты работодателя hh.ru</h2>
         <p class="muted">Войдите под учётной записью менеджера компании на hh.ru. Можно подключить несколько менеджеров.</p>
         <div id="hh-unavailable" class="note warn hidden">На сервере не заданы ключи приложения hh.ru. Укажите свои ключи ниже или обратитесь к поставщику.</div>
-        <table class="tbl" id="hh-accounts"><thead><tr><th>Менеджер</th><th>Компания</th><th>Загружать отклики с</th><th>Последний опрос</th><th></th></tr></thead><tbody></tbody></table>
+        <table class="tbl" id="hh-accounts"><thead><tr><th>Менеджер</th><th>Компания</th><th>Загружать отклики с</th><th>Последняя успешная синхронизация</th><th></th></tr></thead><tbody></tbody></table>
         <button class="btn" id="hh-connect">+ Подключить аккаунт hh.ru</button>
 
         <details class="mt">
@@ -135,6 +141,17 @@
         <button class="btn ghost" id="journal-reload">Обновить</button>
       </div>
       <div class="card mt">
+        <h2>Догрузить пропущенные отклики</h2>
+        <p class="muted">После сбоя (hh.ru или Битрикс24 были недоступны, отключался аккаунт, выключалась интеграция) пропущенные отклики
+          догружаются <b>автоматически</b>. Дополнительно раз в сутки проводится сверка за последние 3 дня.
+          Если нужно перепроверить больший период — укажите дату: будут проверены отклики на всех стадиях в hh.ru
+          (в том числе уже разобранные) и по вакансиям, закрытым за это время. Уже загруженные отклики не задублируются.</p>
+        <div class="row">
+          <label class="inline">Проверить отклики с <input type="date" id="catchup-from"></label>
+          <button class="btn secondary" id="catchup">Догрузить пропущенные</button>
+        </div>
+      </div>
+      <div class="card mt">
         <h2>Последние отклики</h2>
         <table class="tbl" id="resp-table"><thead><tr><th>Дата отклика</th><th>Кандидат</th><th>Вакансия</th><th>Статус</th><th>hh.ru</th></tr></thead><tbody></tbody></table>
       </div>
@@ -144,6 +161,15 @@
       </div>
     </section>
   </main>
+
+  <footer class="site-footer">
+    <div><b>ИТ ИНТЕГРАЦИЯ</b> — внедрение Битрикс24 и интеграции</div>
+    <div class="contacts">
+      <a href="https://itb2b.ru" target="_blank" rel="noopener">itb2b.ru</a>
+      <a href="tel:+79050976966">+7-905-097-69-66</a>
+      <a href="mailto:info@itb2b.ru">info@itb2b.ru</a>
+    </div>
+  </footer>
 
   <footer class="savebar hidden" id="savebar">
     <span class="muted" id="save-hint">Есть несохранённые изменения</span>

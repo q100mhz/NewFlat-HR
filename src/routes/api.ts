@@ -58,6 +58,8 @@ export async function apiRoutes(app: FastifyInstance) {
       importSince: a.importSince,
       lastPollAt: a.lastPollAt,
       lastError: a.lastError,
+      lastSuccessAt: a.lastSuccessAt,
+      catchupFrom: a.catchupFrom,
     }));
     const [stats] = await query(
       `SELECT count(*) FILTER (WHERE status = 'done')::int AS done,
@@ -120,10 +122,10 @@ export async function apiRoutes(app: FastifyInstance) {
     ]);
     return {
       entityTypes: [{ id: 2, title: 'Сделки' }, ...types.map((t: any) => ({ id: t.entityTypeId, title: `Смарт-процесс: ${t.title}` }))],
-      categories: categories.map((c: any) => ({ id: Number(c.id), name: c.name })),
-      users: users.map((u: any) => ({ id: Number(u.ID), name: [u.LAST_NAME, u.NAME].filter(Boolean).join(' ') || u.EMAIL || `#${u.ID}` })),
-      sources: (sources as any[]).map((x) => ({ id: x.STATUS_ID, name: x.NAME })),
-      fields: Object.entries(fields as Record<string, any>)
+      categories: (categories ?? []).map((c: any) => ({ id: Number(c.id), name: c.name })),
+      users: (users ?? []).map((u: any) => ({ id: Number(u.ID), name: [u.LAST_NAME, u.NAME].filter(Boolean).join(' ') || u.EMAIL || `#${u.ID}` })),
+      sources: ((sources as any[]) ?? []).map((x) => ({ id: x.STATUS_ID, name: x.NAME })),
+      fields: Object.entries((fields ?? {}) as Record<string, any>)
         .filter(([, f]) => !f.isReadOnly && MAPPABLE_TYPES.has(f.type))
         .map(([id, f]) => ({ id, title: f.title || id, type: f.type, custom: id.startsWith('ufCrm') || id.startsWith('uf') })),
     };
@@ -139,7 +141,7 @@ export async function apiRoutes(app: FastifyInstance) {
       order: { SORT: 'ASC' },
       filter: { ENTITY_ID: stageEntityId(entityTypeId, categoryId) },
     });
-    return list.map((x) => ({ id: x.STATUS_ID, name: x.NAME, semantics: x.EXTRA?.SEMANTICS ?? null }));
+    return (list ?? []).map((x) => ({ id: x.STATUS_ID, name: x.NAME, semantics: x.EXTRA?.SEMANTICS ?? null }));
   });
 
   // Активные вакансии всех подключённых аккаунтов
@@ -214,10 +216,23 @@ export async function apiRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  // Догрузить отклики, пропущенные с указанной даты (по всем стадиям и закрытым вакансиям)
+  app.post('/api/catchup', async (req) => {
+    const s = session(req, true);
+    const from = new Date(String((req.body as any)?.from ?? ''));
+    if (isNaN(from.getTime())) throw new HttpError(400, 'Укажите дату, с которой догрузить отклики');
+    if (from.getTime() < Date.now() - 90 * 24 * 3600_000) throw new HttpError(400, 'Можно догрузить не более чем за 90 дней');
+    const rows = await query('UPDATE hh_accounts SET catchup_from = $2, poll_requested = TRUE WHERE portal_id = $1 AND active RETURNING id', [s.pid, from]);
+    if (!rows.length) throw new HttpError(400, 'Нет подключённых аккаунтов hh.ru');
+    await plog(s.pid, 'info', `Запрошена догрузка пропущенных откликов с ${from.toLocaleDateString('ru-RU')}`);
+    setImmediate(() => tick());
+    return { ok: true };
+  });
+
   app.post('/api/retry-errors', async (req) => {
     const s = session(req, true);
     const rows = await query(
-      `UPDATE responses SET status = 'pending', attempts = 0, next_attempt_at = now() WHERE portal_id = $1 AND status = 'error' RETURNING id`,
+      `UPDATE responses SET status = 'pending', attempts = 0, next_attempt_at = now() WHERE portal_id = $1 AND status IN ('error', 'pending') RETURNING id`,
       [s.pid],
     );
     await query(
@@ -232,7 +247,7 @@ export async function apiRoutes(app: FastifyInstance) {
     const s = session(req);
     return query(
       `SELECT id, negotiation_id, vacancy_name, candidate_name, status, attempts, last_error, b24_item_id, b24_entity_type_id,
-              is_repeat, hh_created_at, imported_at, hh_last_action, hh_action, hh_action_error
+              is_repeat, via_catchup, hh_created_at, imported_at, hh_last_action, hh_action, hh_action_error
        FROM responses WHERE portal_id = $1 ORDER BY id DESC LIMIT 100`,
       [s.pid],
     );

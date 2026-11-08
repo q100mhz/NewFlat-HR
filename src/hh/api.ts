@@ -23,6 +23,44 @@ export async function listActiveVacancies(hh: HhClient, employerId: string, mana
   return out;
 }
 
+/** Архивные вакансии, закрытые не раньше даты since (отклики на них тоже могли потеряться) */
+export async function listArchivedVacancies(hh: HhClient, employerId: string, managerId: string | null, since: Date): Promise<HhVacancy[]> {
+  const out: HhVacancy[] = [];
+  for (let page = 0; page < 5; page++) {
+    const data = await hh.get(`/employers/${employerId}/vacancies/archived`, { manager_id: managerId ?? undefined, per_page: 50, page });
+    const items: any[] = data?.items ?? [];
+    let anyRecent = false;
+    for (const v of items) {
+      const archivedAt = v.archived_at ? new Date(v.archived_at) : null;
+      if (archivedAt && archivedAt < since) continue;
+      anyRecent = true;
+      out.push({ id: String(v.id), name: v.name, area: v.area?.name, url: v.alternate_url });
+    }
+    if (!anyRecent || page >= (data?.pages ?? 1) - 1) break;
+  }
+  return out;
+}
+
+/** Стадии (коллекции) откликов по вакансии: неразобранные, подумать, собеседование, отказ и т.д. */
+const FALLBACK_COLLECTIONS = ['response', 'consider', 'phone_interview', 'assessment', 'interview', 'offer', 'hired', 'discard_by_employer'];
+export async function listCollectionUrls(hh: HhClient, vacancyId: string): Promise<string[]> {
+  try {
+    const data = await hh.get('/negotiations', { vacancy_id: vacancyId });
+    const urls = [...(data?.collections ?? []), ...(data?.generated_collections ?? [])]
+      .map((c: any) => c?.url)
+      .filter((u: any): u is string => typeof u === 'string' && u.length > 0);
+    if (urls.length) return [...new Set(urls)];
+  } catch {
+    /* используем стандартный список */
+  }
+  return FALLBACK_COLLECTIONS.map((c) => `/negotiations/${c}?vacancy_id=${encodeURIComponent(vacancyId)}`);
+}
+
+/** Страница коллекции откликов (новые сверху) */
+export async function listCollectionPage(hh: HhClient, url: string, page: number) {
+  return hh.get(url, { order_by: 'created_at', order: 'desc', per_page: 50, page });
+}
+
 /** Страница неразобранных откликов по вакансии (новые сверху) */
 export async function listResponsesPage(hh: HhClient, vacancyId: string, page: number) {
   return hh.get('/negotiations/response', {

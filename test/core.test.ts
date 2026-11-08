@@ -70,3 +70,39 @@ test('проверка домена портала', () => {
   assert.ok(!isValidPortalDomain('localhost'));
   assert.ok(!isValidPortalDomain('evil.com/x'));
 });
+
+const { planPoll } = await import('../src/sync/poller.ts');
+
+test('план опроса: обычный, после сбоя, ручная догрузка, плановая сверка', () => {
+  const now = new Date('2026-11-10T12:00:00Z');
+  const min = 60_000;
+  const base = { importSince: new Date('2026-11-01T00:00:00Z'), catchupFrom: null as Date | null, lastFullScanAt: new Date(now.getTime() - 60 * min) };
+
+  // всё работает — быстрый опрос
+  let p = planPoll({ ...base, lastSuccessAt: new Date(now.getTime() - 3 * min) }, 3, now);
+  assert.equal(p.mode, 'quick');
+
+  // 2 часа не было успешных опросов — полная сверка с момента сбоя (минус час запаса)
+  p = planPoll({ ...base, lastSuccessAt: new Date(now.getTime() - 120 * min) }, 3, now);
+  assert.equal(p.mode, 'full');
+  assert.equal(p.reason, 'outage');
+  assert.equal(p.from.getTime(), now.getTime() - 180 * min);
+
+  // сбой длиннее, чем дата «загружать с» — не раньше importSince
+  p = planPoll({ ...base, lastSuccessAt: new Date('2026-10-01T00:00:00Z') }, 3, now);
+  assert.equal(p.from.getTime(), base.importSince.getTime());
+
+  // ручная догрузка с даты
+  const manual = new Date('2026-10-20T00:00:00Z');
+  p = planPoll({ ...base, lastSuccessAt: new Date(now.getTime() - min), catchupFrom: manual }, 3, now);
+  assert.equal(p.reason, 'manual');
+  assert.equal(p.from.getTime(), manual.getTime());
+
+  // сутки без полной сверки — плановая сверка
+  p = planPoll({ ...base, lastSuccessAt: new Date(now.getTime() - min), lastFullScanAt: new Date(now.getTime() - 25 * 60 * min) }, 3, now);
+  assert.equal(p.reason, 'scheduled');
+
+  // первый запуск
+  p = planPoll({ ...base, lastSuccessAt: null }, 3, now);
+  assert.equal(p.reason, 'first');
+});

@@ -1,6 +1,5 @@
 import { query, queryOne } from '../db.js';
-import { config } from '../config.js';
-import { B24Client } from '../b24/client.js';
+import { B24Client, B24Error } from '../b24/client.js';
 import { hhClientFor } from '../hh/client.js';
 import { downloadResumePdf, extractCandidate, getCoverLetter, getResume, plural, type Candidate } from '../hh/api.js';
 import { getPortal } from '../portals.js';
@@ -21,6 +20,8 @@ export interface ResponseRow {
   b24_item_id: string | null;
   b24_contact_id: string | null;
   is_repeat: boolean;
+  via_catchup?: boolean;
+  candidate_name?: string | null;
   step: string | null;
 }
 
@@ -140,9 +141,10 @@ function bb(s: string) {
   return s.replace(/\[/g, '(').replace(/\]/g, ')');
 }
 
-function timelineText(c: Candidate, vacancyName: string, coverLetter: string, isRepeat: boolean): string {
+function timelineText(c: Candidate, vacancyName: string, coverLetter: string, isRepeat: boolean, delayed: boolean, respondedAt: Date | null): string {
   const lines = [
     `[B]Отклик с hh.ru${isRepeat ? ' (повторный)' : ''}[/B]`,
+    delayed && `[I]Отклик поступил во время сбоя интеграции и догружен автоматически${respondedAt ? ` (дата отклика: ${respondedAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} МСК)` : ''}[/I]`,
     `Вакансия: ${bb(vacancyName)}`,
     `Кандидат: ${bb(c.fullName)}${c.age ? `, ${c.age} ${plural(c.age, ['год', 'года', 'лет'])}` : ''}`,
     c.position && `Желаемая должность: ${bb(c.position)}`,
@@ -249,7 +251,7 @@ export async function importResponse(row: ResponseRow): Promise<void> {
       }
     }
     const entityType = s.entityTypeId === 2 ? 'deal' : `dynamic_${s.entityTypeId}`;
-    const text = s.timelineComment ? timelineText(candidate, vacancyName, coverLetter, isRepeat) : 'Резюме кандидата с hh.ru';
+    const text = s.timelineComment ? timelineText(candidate, vacancyName, coverLetter, isRepeat, Boolean(row.via_catchup), row.hh_created_at) : 'Резюме кандидата с hh.ru';
     if (s.timelineComment || files.length) {
       const fields: Record<string, unknown> = { ENTITY_ID: itemId, ENTITY_TYPE: entityType, COMMENT: text };
       if (files.length) fields.FILES = files;
@@ -266,36 +268,47 @@ export async function importResponse(row: ResponseRow): Promise<void> {
   });
 }
 
-/** Обработка очереди откликов */
+/**
+ * Обработка очереди откликов.
+ * Ошибки повторяются БЕЗ ограничения числа попыток (интервал растёт до 30 минут):
+ * когда Битрикс24 или hh.ru снова станут доступны, всё накопившееся загрузится само.
+ */
 export async function processQueue(limit = 20): Promise<number> {
   const rows = await query<ResponseRow>(
     `SELECT * FROM responses
-     WHERE status IN ('pending','error') AND attempts < $1 AND next_attempt_at <= now()
-     ORDER BY next_attempt_at LIMIT $2`,
-    [config.worker.maxAttempts, limit],
+     WHERE status IN ('pending','error') AND next_attempt_at <= now()
+     ORDER BY next_attempt_at, id LIMIT $1`,
+    [limit],
   );
+  // если портал недоступен — не мучаем остальные его отклики в этом цикле
+  const brokenPortals = new Set<number>();
   for (const row of rows) {
-    // перечитываем: шаг мог измениться
+    if (brokenPortals.has(row.portal_id)) {
+      await query(`UPDATE responses SET next_attempt_at = now() + interval '5 minutes' WHERE id = $1`, [row.id]);
+      continue;
+    }
     const fresh = await queryOne<ResponseRow>('SELECT * FROM responses WHERE id = $1', [row.id]);
     if (!fresh || fresh.status === 'done') continue;
     try {
       await importResponse(fresh);
     } catch (e) {
       const attempts = fresh.attempts + 1;
-      const delayMin = Math.min(2 ** attempts, 240);
+      const delayMin = Math.min(2 ** attempts, 30);
+      if (e instanceof B24Error || /настроен|выключена|отключён/.test(errText(e))) brokenPortals.add(fresh.portal_id);
       await query(
         `UPDATE responses SET status = 'error', attempts = $2, last_error = $3,
            next_attempt_at = now() + make_interval(mins => $4) WHERE id = $1`,
         [fresh.id, attempts, errText(e).slice(0, 1000), delayMin],
       );
-      const final = attempts >= config.worker.maxAttempts;
-      await plog(
-        fresh.portal_id,
-        final ? 'error' : 'warn',
-        `Ошибка загрузки отклика ${fresh.negotiation_id} (попытка ${attempts}${final ? ', больше не повторяем' : `, повтор через ${delayMin} мин`}): ${errText(e)}`,
-      );
+      // чтобы не засорять журнал при долгом сбое — пишем 1-ю, 3-ю и каждую 10-ю попытку
+      if (attempts === 1 || attempts === 3 || attempts % 10 === 0) {
+        await plog(
+          fresh.portal_id,
+          attempts >= 3 ? 'error' : 'warn',
+          `Ошибка загрузки отклика ${fresh.negotiation_id}${fresh.candidate_name ? ` (${fresh.candidate_name})` : ''}, попытка ${attempts}, повтор через ${delayMin} мин: ${errText(e)}`,
+        );
+      }
     }
   }
   return rows.length;
 }
-

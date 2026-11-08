@@ -31,6 +31,9 @@ export interface HhAccount {
   active: boolean;
   lastPollAt: Date | null;
   lastError: string | null;
+  lastSuccessAt: Date | null;
+  lastFullScanAt: Date | null;
+  catchupFrom: Date | null;
 }
 
 function mapAccount(r: any): HhAccount {
@@ -49,6 +52,9 @@ function mapAccount(r: any): HhAccount {
     active: r.active,
     lastPollAt: r.last_poll_at,
     lastError: r.last_error,
+    lastSuccessAt: r.last_success_at ?? null,
+    lastFullScanAt: r.last_full_scan_at ?? null,
+    catchupFrom: r.catchup_from ?? null,
   };
 }
 
