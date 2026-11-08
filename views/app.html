@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HH → Битрикс24</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="https://api.bitrix24.com/api/v1/"></script>
+  <script>window.BOOT = {{{boot}}};</script>
+</head>
+<body>
+  <header class="top">
+    <div>
+      <div class="brand">HH.ru → Битрикс24</div>
+      <div class="muted" id="portal-line"></div>
+    </div>
+    <div class="top-actions">
+      <span id="status-badge" class="badge">…</span>
+    </div>
+  </header>
+
+  <div id="readonly-note" class="note warn hidden">Вы не администратор портала — настройки доступны только для просмотра.</div>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="connect" class="active">Подключение</button>
+    <button data-tab="pipeline">Воронка</button>
+    <button data-tab="vacancies">Вакансии</button>
+    <button data-tab="fields">Поля</button>
+    <button data-tab="feedback">Статусы в hh.ru</button>
+    <button data-tab="journal">Журнал</button>
+  </nav>
+
+  <main>
+    <!-- ПОДКЛЮЧЕНИЕ -->
+    <section data-pane="connect">
+      <div class="card">
+        <h2>1. Ключи приложения Битрикс24</h2>
+        <p class="muted">Нужны, чтобы приложение работало в фоне. Возьмите их в настройках этого локального приложения:
+          <b>Разработчикам → Интеграции → (это приложение)</b> — поля «Код приложения (client_id)» и «Ключ приложения (client_secret)».</p>
+        <div id="b24-creds-ok" class="note ok hidden">Ключи сохранены и проверены. client_id: <code id="b24-client-id"></code>
+          <button class="link" id="b24-creds-change">изменить</button></div>
+        <div id="b24-creds-form" class="grid2">
+          <label>client_id<input id="b24-client-id-input" placeholder="local.xxxxxxxx.xxxxxxxx"></label>
+          <label>client_secret<input id="b24-client-secret-input" type="password"></label>
+          <div><button class="btn" id="b24-creds-save">Проверить и сохранить</button></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>2. Аккаунты работодателя hh.ru</h2>
+        <p class="muted">Войдите под учётной записью менеджера компании на hh.ru. Можно подключить несколько менеджеров.</p>
+        <div id="hh-unavailable" class="note warn hidden">На сервере не заданы ключи приложения hh.ru. Укажите свои ключи ниже или обратитесь к поставщику.</div>
+        <table class="tbl" id="hh-accounts"><thead><tr><th>Менеджер</th><th>Компания</th><th>Загружать отклики с</th><th>Последний опрос</th><th></th></tr></thead><tbody></tbody></table>
+        <button class="btn" id="hh-connect">+ Подключить аккаунт hh.ru</button>
+
+        <details class="mt">
+          <summary>Собственное приложение hh.ru (необязательно)</summary>
+          <p class="muted">По умолчанию используется общее приложение сервера. Если у компании своё приложение на dev.hh.ru, укажите его ключи.
+            Redirect URI для регистрации: <code id="hh-redirect"></code></p>
+          <div class="grid2">
+            <label>Client ID<input id="hh-own-id"></label>
+            <label>Client Secret<input id="hh-own-secret" type="password" placeholder="••••••"></label>
+            <div><button class="btn secondary" id="hh-own-save">Сохранить</button>
+              <button class="btn ghost" id="hh-own-reset">Использовать общее</button></div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <!-- ВОРОНКА -->
+    <section data-pane="pipeline" class="hidden">
+      <div class="card">
+        <label class="switch"><input type="checkbox" id="s-enabled"><span></span> Интеграция включена (загружать новые отклики)</label>
+      </div>
+      <div class="card">
+        <h2>Куда загружать отклики</h2>
+        <div class="grid2">
+          <label>Тип карточки<select id="s-entity"></select></label>
+          <label>Воронка<select id="s-category"></select></label>
+          <label>Стадия для новых откликов<select id="s-stage"></select></label>
+          <label>Ответственный по умолчанию<select id="s-assigned"></select></label>
+          <label>Источник (для сделок и контактов)<select id="s-source"></select></label>
+          <label>Проверять новые отклики каждые, мин<input type="number" id="s-interval" min="1" max="60"></label>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Карточка</h2>
+        <div class="grid2">
+          <label>Шаблон названия<input id="s-title">
+            <small class="muted">Переменные: {vacancy}, {name}, {position}, {city}</small></label>
+          <label>Префикс повторного отклика<input id="s-repeat">
+            <small class="muted">Если кандидат уже есть в CRM (совпал телефон или email) — контакт используется существующий, а в названии новой карточки будет этот префикс.</small></label>
+        </div>
+        <label class="check"><input type="checkbox" id="s-pdf"> Прикреплять PDF резюме</label>
+        <label class="check"><input type="checkbox" id="s-comment"> Добавлять в таймлайн комментарий с данными кандидата и сопроводительным письмом</label>
+      </div>
+    </section>
+
+    <!-- ВАКАНСИИ -->
+    <section data-pane="vacancies" class="hidden">
+      <div class="card">
+        <h2>Какие вакансии синхронизировать</h2>
+        <label class="check"><input type="radio" name="vmode" value="all"> Все активные вакансии (можно исключить отдельные)</label>
+        <label class="check"><input type="radio" name="vmode" value="selected"> Только отмеченные</label>
+        <div class="row mt"><button class="btn secondary" id="vac-reload">Обновить список с hh.ru</button></div>
+        <table class="tbl mt" id="vac-table"><thead><tr><th>Синхр.</th><th>Вакансия</th><th>Город</th><th>Аккаунт</th><th>Ответственный</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <!-- ПОЛЯ -->
+    <section data-pane="fields" class="hidden">
+      <div class="card">
+        <h2>Соответствие полей</h2>
+        <p class="muted">Название, контакт (ФИО, телефон, email), стадия и ответственный заполняются автоматически.
+          Здесь можно дополнительно разложить данные из hh.ru по полям карточки. Подходят строковые, числовые, денежные, дата и ссылка.</p>
+        <table class="tbl" id="fields-table"><thead><tr><th>Данные hh.ru</th><th>Поле карточки Битрикс24</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <!-- ОБРАТНАЯ СВЯЗЬ -->
+    <section data-pane="feedback" class="hidden">
+      <div class="card">
+        <label class="switch"><input type="checkbox" id="s-sync"><span></span> Менять статус отклика в hh.ru при смене стадии в Битрикс24</label>
+        <p class="muted">Например: стадия «Отказ» → отказ кандидату на hh.ru, «Собеседование» → приглашение. Текст сообщения кандидату необязателен.</p>
+        <table class="tbl" id="stage-table"><thead><tr><th>Стадия Битрикс24</th><th>Действие в hh.ru</th><th>Сообщение кандидату</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <!-- ЖУРНАЛ -->
+    <section data-pane="journal" class="hidden">
+      <div class="stats" id="stats"></div>
+      <div class="row">
+        <button class="btn" id="sync-now">Проверить отклики сейчас</button>
+        <button class="btn secondary" id="retry">Повторить ошибки</button>
+        <button class="btn ghost" id="journal-reload">Обновить</button>
+      </div>
+      <div class="card mt">
+        <h2>Последние отклики</h2>
+        <table class="tbl" id="resp-table"><thead><tr><th>Дата отклика</th><th>Кандидат</th><th>Вакансия</th><th>Статус</th><th>hh.ru</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="card">
+        <h2>События</h2>
+        <div id="logs" class="logs"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="savebar hidden" id="savebar">
+    <span class="muted" id="save-hint">Есть несохранённые изменения</span>
+    <button class="btn" id="save">Сохранить настройки</button>
+  </footer>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

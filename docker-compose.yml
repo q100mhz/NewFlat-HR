@@ -1,0 +1,49 @@
+# Запуск:   docker compose up -d --build
+# С встроенным HTTPS (Caddy), если на сервере НЕТ своего nginx:
+#           docker compose --profile caddy up -d --build
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://hr:${POSTGRES_PASSWORD}@db:5432/hr
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # слушаем только локально — наружу публикует nginx или Caddy
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hr
+      POSTGRES_DB: hr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hr -d hr"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["caddy"]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [app]
+
+volumes:
+  pgdata:
+  caddy_data:
